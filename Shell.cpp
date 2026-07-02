@@ -7,69 +7,36 @@
 
 using namespace std;
 
-int main()
+class Builtin
 {
-    while (true)
+public:
+    bool execute(vector<string>& words)
     {
-        char cwd[1024];
-        getcwd(cwd, sizeof(cwd));
+        if(words.empty())
+            return true;
 
-        cout << cwd << "$ ";
-
-        string command;
-        getline(cin, command);
-        
-        string inputfile = "";
-        string outputfile = "";
-        bool append = false;
-
-        size_t pos = command.find(">>");
-        if (pos != string::npos)
+        if(words[0] == "pwd")
         {
-            outputfile = command.substr(pos + 2);
-            command = command.substr(0, pos);
-            append = true;
+            char cwd[1024];
+
+            if(getcwd(cwd, sizeof(cwd)) != nullptr)
+                cout << cwd << endl;
+            else
+                perror("getcwd");
+
+            return true;
         }
-        else
-        {
-            size_t pos = command.find('>');
-            if (pos != string::npos)
-            {
-                outputfile = command.substr(pos + 1);
-                command = command.substr(0, pos);
-            }
-        }
-
-        size_t inputPos = command.find('<');
-        if (inputPos != string::npos)
-        {
-            inputfile = command.substr(inputPos + 1);
-            command = command.substr(0, inputPos);
-        }
-
-        if (command.empty())
-            continue;
-
-        // Split command into words
-        stringstream ss(command);
-        vector<string> words;
-        string temp;
-
-        while (ss >> temp)
-        {
-            words.push_back(temp);
-        }
-
-        if (words.empty())
-            continue;
-
-        //---------------- Built-in: exit ----------------//
         if (words[0] == "exit")
         {
-            break;
+            exit(0);
         }
+        if(words[0] == "env")
+        {
+            for(char **env = environ; *env != nullptr; env++)
+                cout << *env << endl;
 
-        //---------------- Built-in: cd ----------------//
+            return true;
+        }
         if (words[0] == "cd")
         {
             int result = 0;
@@ -92,55 +59,27 @@ int main()
                 perror("cd");
             }
 
-            continue;
+            return true;
         }
-
-        //---------------- Built-in: pwd ----------------//
-
-        if (words[0]== "pwd")
-        {
-            char cwd[1024];
-            if (getcwd(cwd, sizeof(cwd)) != nullptr)
-            {
-                cout << cwd << endl;
-            }
-            else
-            {
-                perror("getcwd");
-            }
-            continue;
-        }
-        //---------------- Built-in: env ----------------//
-
-        if (words[0]== "env")
-        {
-            for (char **env = environ; *env != nullptr; ++env)
-            {
-                cout << *env << endl;
-            }
-            continue;
-        }
-
-        //---------------- Built-in: export ----------------//
-
         if (words[0]=="export"){
             if(words.size()<2){
                 cout << "Usage: export <variable>=<value>\n";
-                continue;
+                return true;
             }
             string var = words[1];
             size_t pos = var.find('=');
             if (pos == string::npos){
                 cout << "Usage: export <variable>=<value>\n";
-                continue;
+                return true;
             }
             string key = var.substr(0, pos);
             string value = var.substr(pos + 1);
             if (setenv(key.c_str(), value.c_str(), 1) != 0){
                 perror("setenv");
             }
+            return true;
         }
-
+        
         // //--------------- Built-in: echo ----------------//
 
         // if(words[0] == "echo")
@@ -167,6 +106,85 @@ int main()
 
         //     continue;
         // }
+
+
+
+        return false;
+    }
+};
+
+string trim(const string &str)
+{
+    size_t start = str.find_first_not_of(" \t");
+    size_t end = str.find_last_not_of(" \t");
+
+    if (start == string::npos)
+        return "";
+
+    return str.substr(start, end - start + 1);
+}
+
+int main()
+{
+    Builtin builtins;
+    while (true)
+    {
+        char cwd[1024];
+        getcwd(cwd, sizeof(cwd));
+
+        cout << cwd << "$ ";
+
+        string command;
+        getline(cin, command);
+        
+        string inputfile = "";
+        string outputfile = "";
+        bool append = false;
+
+        size_t pos = command.find(">>");
+        if (pos != string::npos)
+        {
+            outputfile = trim(command.substr(pos + 2));
+            command = trim(command.substr(0, pos));
+            append = true;
+        }
+        else
+        {
+            size_t pos = command.find('>');
+            if (pos != string::npos)
+            {
+                outputfile = trim(command.substr(pos + 1));
+                command = trim(command.substr(0, pos));
+            }
+        }
+
+        size_t inputPos = command.find('<');
+        if (inputPos != string::npos)
+        {
+            inputfile = trim(command.substr(inputPos + 1));
+            command = trim(command.substr(0, inputPos));
+        }
+
+        if (command.empty())
+            continue;
+
+        // Split command into words
+        stringstream ss(command);
+        vector<string> words;
+        string temp;
+
+        while (ss >> temp)
+        {
+            words.push_back(temp);
+        }
+
+        if(words.empty())
+            continue;
+
+        if(builtins.execute(words))
+        {
+            continue;
+        }
 
         //---------------- External Commands ----------------//
 
