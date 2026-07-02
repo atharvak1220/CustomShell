@@ -3,6 +3,7 @@
 #include <vector>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 
 using namespace std;
 
@@ -17,6 +18,34 @@ int main()
 
         string command;
         getline(cin, command);
+        
+        string inputfile = "";
+        string outputfile = "";
+        bool append = false;
+
+        size_t pos = command.find(">>");
+        if (pos != string::npos)
+        {
+            outputfile = command.substr(pos + 2);
+            command = command.substr(0, pos);
+            append = true;
+        }
+        else
+        {
+            size_t pos = command.find('>');
+            if (pos != string::npos)
+            {
+                outputfile = command.substr(pos + 1);
+                command = command.substr(0, pos);
+            }
+        }
+
+        size_t inputPos = command.find('<');
+        if (inputPos != string::npos)
+        {
+            inputfile = command.substr(inputPos + 1);
+            command = command.substr(0, inputPos);
+        }
 
         if (command.empty())
             continue;
@@ -97,6 +126,7 @@ int main()
         if (words[0]=="export"){
             if(words.size()<2){
                 cout << "Usage: export <variable>=<value>\n";
+                continue;
             }
             string var = words[1];
             size_t pos = var.find('=');
@@ -111,32 +141,32 @@ int main()
             }
         }
 
-        //--------------- Built-in: echo ----------------//
+        // //--------------- Built-in: echo ----------------//
 
-        if(words[0] == "echo")
-        {
-            for(size_t i = 1; i < words.size(); i++)
-            {
-                if(words[i][0] == '$')
-                {
-                    char *value = getenv(words[i].substr(1).c_str());
+        // if(words[0] == "echo")
+        // {
+        //     for(size_t i = 1; i < words.size(); i++)
+        //     {
+        //         if(words[i][0] == '$')
+        //         {
+        //             char *value = getenv(words[i].substr(1).c_str());
 
-                    if(value)
-                        cout << value;
-                }
-                else
-                {
-                    cout << words[i];
-                }
+        //             if(value)
+        //                 cout << value;
+        //         }
+        //         else
+        //         {
+        //             cout << words[i];
+        //         }
 
-                if(i != words.size() - 1)
-                    cout << " ";
-            }
+        //         if(i != words.size() - 1)
+        //             cout << " ";
+        //     }
 
-            cout << endl;
+        //     cout << endl;
 
-            continue;
-        }
+        //     continue;
+        // }
 
         //---------------- External Commands ----------------//
 
@@ -154,6 +184,37 @@ int main()
 
         if (pid == 0)
         {
+            if(!inputfile.empty())
+            {
+               int fd = open(inputfile.c_str(), O_RDONLY);
+               if(fd < 0)
+               {
+                   perror("open input file");
+                   exit(1);
+               }
+               dup2(fd, STDIN_FILENO);
+               close(fd);
+            }
+            if(!outputfile.empty())
+            {
+                int fd;
+                if(append)
+                {
+                    fd = open(outputfile.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
+                }
+                else
+                {
+                    fd = open(outputfile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                }
+                if(fd < 0)
+                {
+                    perror("open output file");
+                    exit(1);
+                }
+                dup2(fd, STDOUT_FILENO);
+                close(fd);
+            }
+
             execvp(args[0], args.data());
 
             perror("Command Failed");
