@@ -7,6 +7,17 @@
 
 using namespace std;
 
+string trim(const string &str)
+{
+    size_t start = str.find_first_not_of(" \t");
+    size_t end = str.find_last_not_of(" \t");
+
+    if (start == string::npos)
+        return "";
+
+    return str.substr(start, end - start + 1);
+}
+
 class Builtin
 {
 public:
@@ -26,7 +37,7 @@ public:
 
             return true;
         }
-        if (words[0] == "exit")
+        if(words[0] == "exit")
         {
             exit(0);
         }
@@ -89,7 +100,6 @@ public:
         //         if(words[i][0] == '$')
         //         {
         //             char *value = getenv(words[i].substr(1).c_str());
-
         //             if(value)
         //                 cout << value;
         //         }
@@ -97,76 +107,68 @@ public:
         //         {
         //             cout << words[i];
         //         }
-
         //         if(i != words.size() - 1)
         //             cout << " ";
         //     }
-
         //     cout << endl;
-
         //     continue;
         // }
-
-
 
         return false;
     }
 };
 
-string trim(const string &str)
+class Redirect
 {
-    size_t start = str.find_first_not_of(" \t");
-    size_t end = str.find_last_not_of(" \t");
+public:
+    string inputFile;
+    string outputFile;
+    bool append = false;
 
-    if (start == string::npos)
-        return "";
-
-    return str.substr(start, end - start + 1);
-}
-
-int main()
-{
-    Builtin builtins;
-    while (true)
+    void parse(string &command)
     {
-        char cwd[1024];
-        getcwd(cwd, sizeof(cwd));
-
-        cout << cwd << "$ ";
-
-        string command;
-        getline(cin, command);
-        
-        string inputfile = "";
-        string outputfile = "";
-        bool append = false;
-
         size_t pos = command.find(">>");
-        if (pos != string::npos)
+
+        if(pos != string::npos)
         {
-            outputfile = trim(command.substr(pos + 2));
+            outputFile = trim(command.substr(pos + 2));
             command = trim(command.substr(0, pos));
             append = true;
         }
         else
         {
-            size_t pos = command.find('>');
-            if (pos != string::npos)
+            pos = command.find('>');
+
+            if(pos != string::npos)
             {
-                outputfile = trim(command.substr(pos + 1));
+                outputFile = trim(command.substr(pos + 1));
                 command = trim(command.substr(0, pos));
             }
         }
 
-        size_t inputPos = command.find('<');
-        if (inputPos != string::npos)
-        {
-            inputfile = trim(command.substr(inputPos + 1));
-            command = trim(command.substr(0, inputPos));
-        }
+        pos = command.find('<');
 
-        if (command.empty())
-            continue;
+        if(pos != string::npos)
+        {
+            inputFile = trim(command.substr(pos + 1));
+            command = trim(command.substr(0, pos));
+        }
+    }
+};
+
+int main()
+{
+    Builtin builtins;
+    Redirect redirect;
+    while (true)
+    {
+        char cwd[1024];
+        getcwd(cwd, sizeof(cwd));
+        cout << cwd << "$ ";
+
+        string command;
+        getline(cin, command);
+        
 
         // Split command into words
         stringstream ss(command);
@@ -202,9 +204,10 @@ int main()
 
         if (pid == 0)
         {
-            if(!inputfile.empty())
+            redirect.parse(command);
+            if(!redirect.inputFile.empty())
             {
-               int fd = open(inputfile.c_str(), O_RDONLY);
+               int fd = open(redirect.inputFile.c_str(), O_RDONLY);
                if(fd < 0)
                {
                    perror("open input file");
@@ -213,16 +216,16 @@ int main()
                dup2(fd, STDIN_FILENO);
                close(fd);
             }
-            if(!outputfile.empty())
+            if(!redirect.outputFile.empty())
             {
                 int fd;
-                if(append)
+                if(redirect.append)
                 {
-                    fd = open(outputfile.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
+                    fd = open(redirect.outputFile.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0644);
                 }
                 else
                 {
-                    fd = open(outputfile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                    fd = open(redirect.outputFile.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
                 }
                 if(fd < 0)
                 {
